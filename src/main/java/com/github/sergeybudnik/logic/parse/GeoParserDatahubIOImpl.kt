@@ -4,103 +4,85 @@ import com.github.sergeybudnik.data.GDCoordinate
 import com.github.sergeybudnik.data.GDCountry
 import com.github.sergeybudnik.data.GDCountryBound
 import com.github.sergeybudnik.data.GDCountryInfo
+import com.google.gson.JsonArray
+import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import java.io.BufferedReader
 import java.io.FileReader
 
 class GeoParserDatahubIOImpl : GeoParser {
+    private val jsonAccessor = GeoParserDatahubIOJsonAccessor()
+
     override fun parse(path: String): List<GDCountry> {
-        val gdCountries = ArrayList<GDCountry>()
-
-        BufferedReader(FileReader(path)).use {
-            val data = JsonParser.parseReader(it).asJsonObject
-            val features = data.get("features").asJsonArray
-
-            features
-                    .map { feature -> feature.asJsonObject }
-                    .forEach { feature ->
-                        val gdCountryInfo = getCountryInfo(feature = feature)
-
-                        val geometryType = getGeometryType(feature = feature)
-
-                        gdCountries.add(
-                                GDCountry(
-                                        info = gdCountryInfo,
-                                        bounds = when (geometryType) {
-                                            GeoParserDatahubIOGeometryType.POLYGON -> {
-                                                getCountryBoundsFromPolygon(feature = feature)
-                                            }
-                                            GeoParserDatahubIOGeometryType.MULTIPOLYGON -> {
-                                                getCountryBoundsFromMultiPolygon(feature = feature)
-                                            }
-                                        }
-                                )
-                        )
-                    }
-       }
-
-        return gdCountries
-    }
-
-    private fun getCountryInfo(feature: JsonObject): GDCountryInfo {
-        return GDCountryInfo(
-                code = feature.get("properties").asJsonObject.get("ISO_A3").asString
-        )
-    }
-
-    private fun getCountryBoundsFromPolygon(feature: JsonObject): List<GDCountryBound> {
-        val gdCoordinates = ArrayList<GDCoordinate>()
-
-        feature
-                .get("geometry").asJsonObject
-                .get("coordinates").asJsonArray[0].asJsonArray
-                .forEach { coordinate ->
-                    gdCoordinates.add(
-                            GDCoordinate(
-                                    lat = coordinate.asJsonArray.get(1).asDouble,
-                                    lon = coordinate.asJsonArray.get(0).asDouble
+        return BufferedReader(FileReader(path)).use { bufferedReader ->
+            JsonParser.parseReader(bufferedReader).let { jsonData ->
+                jsonAccessor.getFeaturesFromJson(jsonData = jsonData)
+                        .map { jsonFeature ->
+                            GDCountry(
+                                    info = getCountryInfo(jsonFeature = jsonFeature),
+                                    bounds = getCountryBounds(jsonFeature = jsonFeature)
                             )
-                    )
-                }
+                        }
+            }
+        }
+    }
 
-        return listOf(
-                GDCountryBound(
-                        coordinates = gdCoordinates
+    private fun getCountryInfo(jsonFeature: JsonObject): GDCountryInfo {
+        return GDCountryInfo(
+                code = jsonAccessor.getISO3FromJson(
+                        jsonFeature = jsonFeature
                 )
         )
     }
 
-    private fun getCountryBoundsFromMultiPolygon(feature: JsonObject): List<GDCountryBound> {
-        val gdCountryBounds = ArrayList<GDCountryBound>()
-
-        feature
-                .get("geometry").asJsonObject
-                .get("coordinates").asJsonArray
-                .forEach { coordinates ->
-                    val gdCoordinates = ArrayList<GDCoordinate>()
-
-                    coordinates.asJsonArray.get(0).asJsonArray.forEach { coordinate ->
-                        gdCoordinates.add(
-                                GDCoordinate(
-                                        lat = coordinate.asJsonArray.get(1).asDouble,
-                                        lon = coordinate.asJsonArray.get(0).asDouble
-                                )
-                        )
-                    }
-
-                    gdCountryBounds.add(
-                            GDCountryBound(
-                                    coordinates = gdCoordinates
-                            )
-                    )
-                }
-
-        return gdCountryBounds
+    private fun getCountryBounds(jsonFeature: JsonObject): List<GDCountryBound> {
+        return when (getGeometryType(jsonFeature = jsonFeature)) {
+            GeoParserDatahubIOGeometryType.POLYGON -> {
+                getCountryBoundsFromPolygon(jsonFeature = jsonFeature)
+            }
+            GeoParserDatahubIOGeometryType.MULTIPOLYGON -> {
+                getCountryBoundsFromMultiPolygon(jsonFeature = jsonFeature)
+            }
+        }
     }
 
-    private fun getGeometryType(feature: JsonObject): GeoParserDatahubIOGeometryType {
-        val type = feature.get("geometry").asJsonObject.get("type").asString
+    private fun getCountryBoundsFromPolygon(jsonFeature: JsonObject): List<GDCountryBound> {
+        return listOf(
+                GDCountryBound(
+                        coordinates = jsonAccessor
+                                .getPolygonCoordinatesFromJson(jsonFeature = jsonFeature)
+                                .map { coordinate -> getCoordinate(jsonCoordinate = coordinate) }
+                )
+        )
+    }
+
+    private fun getCountryBoundsFromMultiPolygon(jsonFeature: JsonObject): List<GDCountryBound> {
+        return jsonAccessor.getMultipolygonPolygonsFromJson(jsonFeature = jsonFeature)
+                .map { jsonPolygon ->
+                    GDCountryBound(
+                            coordinates = jsonAccessor
+                                    .getMultipolygonCoordinatesFromJson(jsonPolygon = jsonPolygon)
+                                    .map { jsonCoordinate -> getCoordinate(jsonCoordinate = jsonCoordinate) }
+                    )
+                }
+    }
+
+    private fun getCoordinate(jsonCoordinate: JsonArray): GDCoordinate {
+        return GDCoordinate(
+                lat = jsonAccessor.getCoordinateLatFromJson(
+                        jsonCoordinate = jsonCoordinate
+                ),
+                lon = jsonAccessor.getCoordinateLonFromJson(
+                        jsonCoordinate = jsonCoordinate
+                )
+        )
+    }
+
+    private fun getGeometryType(jsonFeature: JsonObject): GeoParserDatahubIOGeometryType {
+        val type = jsonAccessor.getGeometryTypeFromJson(
+                jsonFeature = jsonFeature
+        )
 
         return if (type == "Polygon") {
             GeoParserDatahubIOGeometryType.POLYGON
@@ -112,4 +94,47 @@ class GeoParserDatahubIOImpl : GeoParser {
 
 private enum class GeoParserDatahubIOGeometryType {
     POLYGON, MULTIPOLYGON
+}
+
+private class GeoParserDatahubIOJsonAccessor {
+    fun getFeaturesFromJson(jsonData: JsonElement): List<JsonObject> {
+        return jsonData.asJsonObject.get("features").asJsonArray.map { it.asJsonObject }
+    }
+
+    fun getGeometryFromJson(jsonFeature: JsonObject): JsonObject {
+        return jsonFeature.get("geometry").asJsonObject
+    }
+
+    fun getGeometryTypeFromJson(jsonFeature: JsonObject): String {
+        return getGeometryFromJson(jsonFeature = jsonFeature).get("type").asString
+    }
+
+    fun getPolygonCoordinatesFromJson(jsonFeature: JsonObject): List<JsonArray> {
+        return getGeometryFromJson(jsonFeature = jsonFeature)
+                .get("coordinates").asJsonArray[0].asJsonArray
+                .map { coordinate -> coordinate.asJsonArray }
+    }
+
+    fun getMultipolygonPolygonsFromJson(jsonFeature: JsonObject): List<JsonArray> {
+        return getGeometryFromJson(jsonFeature = jsonFeature)
+                .get("coordinates").asJsonArray
+                .map { polygon -> polygon.asJsonArray }
+    }
+
+    fun getMultipolygonCoordinatesFromJson(jsonPolygon: JsonArray): List<JsonArray> {
+        return jsonPolygon.get(0).asJsonArray
+                .map { coordinate -> coordinate.asJsonArray }
+    }
+
+    fun getCoordinateLatFromJson(jsonCoordinate: JsonArray): Double {
+        return jsonCoordinate.get(1).asDouble
+    }
+
+    fun getCoordinateLonFromJson(jsonCoordinate: JsonArray): Double {
+        return jsonCoordinate.get(0).asDouble
+    }
+
+    fun getISO3FromJson(jsonFeature: JsonObject): String {
+        return jsonFeature.get("properties").asJsonObject.get("ISO_A3").asString
+    }
 }

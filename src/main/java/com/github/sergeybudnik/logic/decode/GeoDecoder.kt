@@ -136,21 +136,21 @@ class GeoDecoderImpl : GeoDecoder {
             val extreme = GDCoordinate(Double.MAX_VALUE, point.lon)
 
             var count = 0
-            var i = 0
+            var current = 0
 
             do {
-                val next: Int = (i + 1) % bound.size
+                val next: Int = (current + 1) % bound.size
 
-                if (isIntersects(s1 = bound[i], f1 = bound[next], s2 = point, f2 = extreme)) {
-                    if (getOrientation(c1 = bound[i], c2 = point, c3 = bound[next]) === GDOrientation.CO_LINEAR) {
-                        return isOnSegment(point = point, start = bound[i], finish = bound[next])
+                if (isIntersects(s1 = bound[current], f1 = bound[next], s2 = point, f2 = extreme)) {
+                    if (getOrientation(c1 = bound[current], c2 = point, c3 = bound[next]) === GDOrientation.CO_LINEAR) {
+                        return isOnSegment(point = point, start = bound[current], finish = bound[next])
                     } else {
                         count++
                     }
                 }
 
-                i = next
-            } while (i != 0)
+                current = next
+            } while (current != 0)
 
             return count % 2 == 1
         }

@@ -114,4 +114,31 @@ internal class GeoDecoderImplTest {
         /* Outside */
         assertEquals(null, GeoDecoderImpl().decode(coordinate = GDCoordinate(lat = 27.0, lon = 28.0), countries = gdCountries)?.code)
     }
+
+    @Test
+    fun testPositiveNegativeCoordinates() {
+        val gdCountries = listOf(
+                GDCountry(
+                        info = GDCountryInfo(code = "A"),
+                        bounds = listOf(
+                                GDCountryBound(
+                                        coordinates = listOf(
+                                                GDCoordinate(lat = -5.0, lon = -5.0),
+                                                GDCoordinate(lat = -5.0, lon =  5.0),
+                                                GDCoordinate(lat =  5.0, lon =  5.0),
+                                                GDCoordinate(lat =  5.0, lon = -5.0)
+                                        )
+                                )
+                        )
+                )
+        )
+
+        /* Inside */
+        assertEquals("A", GeoDecoderImpl().decode(coordinate = GDCoordinate(lat = 0.0, lon = 0.0), countries = gdCountries)?.code)
+        /* On bounds */
+        assertEquals("A", GeoDecoderImpl().decode(coordinate = GDCoordinate(lat = 0.0, lon = -5.0), countries = gdCountries)?.code)
+        /* Outside */
+        assertEquals(null, GeoDecoderImpl().decode(coordinate = GDCoordinate(lat = 12.0, lon = 13.0), countries = gdCountries)?.code)
+
+    }
 }

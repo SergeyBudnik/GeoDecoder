@@ -15,14 +15,14 @@ class GeoParserDatahubIOImpl : GeoParser {
     private val jsonAccessor = GeoParserDatahubIOJsonAccessor()
 
     override fun parse(inputStream: InputStream, charset: Charset): List<GDCountry> {
-        return parseInternal(InputStreamReader(inputStream, charset))
+        return parse(InputStreamReader(inputStream, charset))
     }
 
     override fun parse(path: String): List<GDCountry> {
-        return parseInternal(FileReader(path))
+        return parse(FileReader(path))
     }
 
-    private fun parseInternal(reader: Reader): List<GDCountry> {
+    private fun parse(reader: Reader): List<GDCountry> {
         return BufferedReader(reader).use { bufferedReader ->
             JsonParser.parseReader(bufferedReader).let { jsonData ->
                 jsonAccessor.getFeaturesFromJson(jsonData = jsonData)

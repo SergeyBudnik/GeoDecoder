@@ -15,19 +15,23 @@ internal class GeoParserDatahubIOImplTest {
 
     @Test
     fun testParsingViaInputStream_FromJson() {
-        val inputStream = javaClass.getResourceAsStream(jsonResourceName)
-        val countries = GeoParserDatahubIOImpl().parse(inputStream, Charset.forName("UTF-8"))
+        javaClass.getResourceAsStream(jsonResourceName).use { inputStream ->
+            val countries = GeoParserDatahubIOImpl().parse(inputStream, Charset.forName("UTF-8"))
 
-        decodeAndCheckCorrectness(countries)
+            decodeAndCheckCorrectness(countries)
+        }
     }
 
     @Test
     fun testParsingViaInputStream_FromZipWithJson() {
-        val zipInputStream = ZipInputStream(javaClass.getResourceAsStream(zipWithJsonResourceName))
-        zipInputStream.nextEntry
-        val countries = GeoParserDatahubIOImpl().parse(zipInputStream, Charset.defaultCharset())
+        javaClass.getResourceAsStream(zipWithJsonResourceName).use { resourceInputStream ->
+            ZipInputStream(resourceInputStream).use { zipInputStream ->
+                zipInputStream.getNextEntry() // positions the stream at the beginning of the entry data
+                val countries = GeoParserDatahubIOImpl().parse(zipInputStream, Charset.defaultCharset())
 
-        decodeAndCheckCorrectness(countries)
+                decodeAndCheckCorrectness(countries)
+            }
+        }
     }
 
     private fun decodeAndCheckCorrectness(countries: List<GDCountry>) {

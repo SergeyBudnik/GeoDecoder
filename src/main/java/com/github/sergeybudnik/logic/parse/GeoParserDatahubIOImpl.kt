@@ -8,14 +8,22 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
-import java.io.BufferedReader
-import java.io.FileReader
+import java.io.*
+import java.nio.charset.Charset
 
 class GeoParserDatahubIOImpl : GeoParser {
     private val jsonAccessor = GeoParserDatahubIOJsonAccessor()
 
+    override fun parse(inputStream: InputStream, charset: Charset): List<GDCountry> {
+        return parse(InputStreamReader(inputStream, charset))
+    }
+
     override fun parse(path: String): List<GDCountry> {
-        return BufferedReader(FileReader(path)).use { bufferedReader ->
+        return parse(FileReader(path))
+    }
+
+    private fun parse(reader: Reader): List<GDCountry> {
+        return BufferedReader(reader).use { bufferedReader ->
             JsonParser.parseReader(bufferedReader).let { jsonData ->
                 jsonAccessor.getFeaturesFromJson(jsonData = jsonData)
                         .map { jsonFeature ->
